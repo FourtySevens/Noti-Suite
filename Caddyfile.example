@@ -1,0 +1,11 @@
+# Add this site block to your existing Caddy LXC configuration.
+# Verify the Docker host really uses 192.168.0.144 before deploying.
+champyy.ddns.net {
+	handle_path /scheduler/* {
+		reverse_proxy 192.168.0.144:8080
+	}
+
+	handle {
+		reverse_proxy 192.168.0.144:8093
+	}
+}

@@ -1,0 +1,10 @@
+# Public URL must exactly match the server URL entered in the ntfy iOS app.
+base-url: "https://champyy.ddns.net"
+listen-http: ":8093"
+cache-file: "/var/cache/ntfy/cache.db"
+auth-file: "/var/lib/ntfy/auth.db"
+auth-default-access: "deny-all"
+enable-login: true
+behind-proxy: true
+attachment-cache-dir: "/var/lib/ntfy/attachments"
+upstream-base-url: "https://ntfy.sh"

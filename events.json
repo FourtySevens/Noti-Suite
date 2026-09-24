@@ -1,0 +1,16 @@
+{
+  "backups": {
+    "completed": {
+      "title": "Backup complete",
+      "message": "The backup finished successfully.",
+      "priority": 3,
+      "tags": ["white_check_mark"]
+    },
+    "failed": {
+      "title": "Backup failed",
+      "message": "Check the backup logs.",
+      "priority": 5,
+      "tags": ["warning"]
+    }
+  }
+}

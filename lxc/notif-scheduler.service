@@ -1,0 +1,28 @@
+[Unit]
+Description=NotifScheduler HTTP API and delivery worker
+After=network-online.target ntfy.service
+Wants=network-online.target ntfy.service
+
+[Service]
+Type=simple
+User=notif-scheduler
+Group=notif-scheduler
+WorkingDirectory=/opt/notif-scheduler
+EnvironmentFile=/etc/notif-scheduler/env
+Environment=DATABASE_PATH=/var/lib/notif-scheduler/scheduler.db
+Environment=EVENTS_PATH=/etc/notif-scheduler/events.json
+Environment=NTFY_BASE_URL=http://127.0.0.1:8093
+Environment=NTFY_TOPIC_PREFIX=notif-
+Environment=SCHEDULER_BIND=0.0.0.0
+Environment=SCHEDULER_PORT=8080
+ExecStart=/usr/bin/python3 /opt/notif-scheduler/scheduler.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/notif-scheduler
+
+[Install]
+WantedBy=multi-user.target
