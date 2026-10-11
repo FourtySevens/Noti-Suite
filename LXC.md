@@ -74,7 +74,16 @@ curl -X POST 'https://scheduler.foursevens.win/v1/projects/backups/events/failed
 
 The preset text comes from `/etc/notif-scheduler/events.json`. To change or add event names, edit that file and run `systemctl restart notif-scheduler`. The [main README](README.md#create-notifications) describes immediate, scheduled, and recurring API requests.
 
-If delivery fails, inspect `journalctl -u notif-scheduler -u ntfy -n 100 --no-pager`. Check both local service ports on Noti-Suite and test `https://ntfy.foursevens.win` over cellular. For a Cloudflare 502, use the [hop-by-hop checks](ACCESS.md#verify-each-hop). If the iPhone only shows “New message,” it received the wakeup but could not fetch the actual message from your public server.
+If delivery fails, inspect `journalctl -u notif-scheduler -u ntfy -n 100 --no-pager`. Check both local service ports on Noti-Suite and test `https://ntfy.foursevens.win` over cellular. For a Cloudflare 502, use the [hop-by-hop checks](ACCESS.md#verify-each-hop). If the iPhone only shows “New message,” the upstream wakeup reached it, but the ntfy iOS app did not fetch the actual message from your server.
+
+If the scheduler dashboard says **Sent** but the iPhone shows nothing, check whether ntfy stored the message through both its local and public endpoints. Run these on Noti-Suite; `curl -u admin` prompts for the ntfy admin password. Do not paste passwords or message text into support requests.
+
+```sh
+curl -i -u admin 'http://127.0.0.1:8093/notif-backups/json?poll=1&since=latest'
+curl -i -u admin 'https://ntfy.foursevens.win/notif-backups/json?poll=1&since=latest'
+```
+
+Both should return HTTP 200 and a JSON line with `"event":"message"`. If only the local request works, fix the public tunnel route for `ntfy.foursevens.win`. If both work, open the ntfy web app on **the iPhone over cellular** and check whether the same message is visible there. If Safari sees it but the native ntfy app does not, remove and re-add the native app's user for `https://ntfy.foursevens.win` using the ntfy admin username and password, then remove and re-add its `notif-backups` subscription and send a fresh test. A browser login does not sign the native app in. Also check whether a Cloudflare Access login or WAF challenge applies to the ntfy hostname; Safari may satisfy it while the native app's message fetch cannot. Check the active `/etc/ntfy/server.yml` for `base-url: "https://ntfy.foursevens.win"` and `upstream-base-url: "https://ntfy.sh"`; restart ntfy only if you correct a mismatch. [ntfy's iOS issue guide](https://docs.ntfy.sh/known-issues/#ios-app-not-receiving-notifications-anymore) recommends re-adding a subscription when APNS/Firebase registration stalls.
 
 ## Updates and backups
 
