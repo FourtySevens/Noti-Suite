@@ -16,4 +16,4 @@ for asset in scheduler.py dashboard.html dashboard.css dashboard.js; do
 done
 systemctl restart notif-scheduler
 systemctl is-active --quiet notif-scheduler
-echo 'Scheduler updated. Dashboard: https://ntfy.foursevens.win/scheduler/'
+echo 'Scheduler updated. Dashboard: https://scheduler.foursevens.win/'

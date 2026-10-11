@@ -1,10 +1,10 @@
 # Native Proxmox LXC deployment
 
-This path runs **ntfy and NotifScheduler directly under systemd** in one Debian or Ubuntu LXC. Docker is not needed. Your existing Caddy LXC stays separate and proxies to ports 8093 (ntfy) and 8080 (scheduler) on Noti-Suite at `192.168.0.40`.
+This path runs **ntfy and NotifScheduler directly under systemd** in one Debian or Ubuntu LXC. Docker is not needed. Noti-Suite is at `192.168.0.40`; the Cloudflare Tunnel connector already runs there. Your existing Caddy LXC can keep serving its other sites.
 
 ## 1. Prepare the LXC
 
-Create a Debian 12/13 or Ubuntu LXC with systemd, a persistent disk, and a static or reserved LAN IP. Make sure the Caddy LXC can reach the new container on TCP 8080 and 8093. Allow the new container outbound HTTPS to `ntfy.sh` for iOS push wakeups. Keep the Proxmox and container firewalls set so only the Caddy LXC can reach those two incoming ports.
+Create a Debian 12/13 or Ubuntu LXC with systemd, a persistent disk, and a static or reserved LAN IP. Allow the container outbound HTTPS to Cloudflare and `ntfy.sh` for tunnel traffic and iOS push wakeups. The tunnel connector uses loopback ports 8080 and 8093, so those ports do not need to be open to the Internet. Restrict LAN access to trusted machines if the services also listen on the LAN address.
 
 Install Python and ntfy inside the **new** LXC. The commands below use [ntfy's official Debian/Ubuntu repository](https://docs.ntfy.sh/install/#debianubuntu-repository):
 
@@ -56,11 +56,11 @@ curl http://127.0.0.1:8080/healthz
 
 The health check should return `{"status":"ok"}`. It confirms the scheduler is running; a real notification test below confirms delivery.
 
-## 4. Publish through Caddy and Cloudflare Tunnel
+## 4. Publish through Cloudflare Tunnel
 
-Add the loopback listener in [Caddyfile.example](Caddyfile.example) to your **existing Caddy LXC**, alongside its current `foursevens.win` sites. It points to Noti-Suite at `192.168.0.40`. Validate and reload Caddy there. Follow [ACCESS.md](ACCESS.md) to install `cloudflared` in that Caddy LXC and publish `ntfy.foursevens.win` with service URL `http://127.0.0.1:8081`. No new inbound router ports are needed. `champyy.ddns.net` and your VPN remain unchanged.
+Keep the existing `cloudflared` connector in **Noti-Suite**. In the same tunnel, publish `ntfy.foursevens.win` to `http://127.0.0.1:8093` and `scheduler.foursevens.win` to `http://127.0.0.1:8080`. Follow [ACCESS.md](ACCESS.md) for the exact settings and checks. No new inbound router ports are needed. `champyy.ddns.net` and your VPN remain unchanged. [Caddyfile.example](Caddyfile.example) is only for a later move of the connector to your Caddy LXC.
 
-The ntfy app must be reachable at the root of `https://ntfy.foursevens.win`; the scheduler is under `/scheduler/`. The [iOS push setup](https://docs.ntfy.sh/config/#ios-instant-notifications) requires ntfy's `base-url` to match the URL used in the iOS app. The supplied config also sets `upstream-base-url: https://ntfy.sh` so iOS receives prompt wakeups.
+The ntfy app must be reachable at the root of `https://ntfy.foursevens.win`; the scheduler dashboard is at `https://scheduler.foursevens.win/`. The [iOS push setup](https://docs.ntfy.sh/config/#ios-instant-notifications) requires ntfy's `base-url` to match the URL used in the iOS app. The supplied config also sets `upstream-base-url: https://ntfy.sh` so iOS receives prompt wakeups.
 
 ## 5. Test an event from outside the LAN
 
@@ -68,14 +68,14 @@ On the iPhone, add `https://ntfy.foursevens.win` as the ntfy server, sign in as 
 
 ```sh
 api_key=$(sed -n 's/^SCHEDULER_API_KEY=//p' /etc/notif-scheduler/env)
-curl -X POST 'https://ntfy.foursevens.win/scheduler/v1/projects/backups/events/failed' \
+curl -X POST 'https://scheduler.foursevens.win/v1/projects/backups/events/failed' \
   -H "X-API-Key: ${api_key}"
 ```
 
 The preset text comes from `/etc/notif-scheduler/events.json`. To change or add event names, edit that file and run `systemctl restart notif-scheduler`. The [main README](README.md#create-notifications) describes immediate, scheduled, and recurring API requests.
 
-If delivery fails, inspect `journalctl -u notif-scheduler -u ntfy -n 100 --no-pager`. Check reachability from the Caddy LXC to both ports, and test `https://ntfy.foursevens.win` over cellular. For a Cloudflare 502, use the [hop-by-hop checks](ACCESS.md#if-cloudflare-returns-502). If the iPhone only shows “New message,” it received the wakeup but could not fetch the actual message from your public server.
+If delivery fails, inspect `journalctl -u notif-scheduler -u ntfy -n 100 --no-pager`. Check both local service ports on Noti-Suite and test `https://ntfy.foursevens.win` over cellular. For a Cloudflare 502, use the [hop-by-hop checks](ACCESS.md#verify-each-hop). If the iPhone only shows “New message,” it received the wakeup but could not fetch the actual message from your public server.
 
 ## Updates and backups
 
-Back up `/var/lib/notif-scheduler`, `/var/lib/ntfy`, `/var/cache/ntfy`, `/etc/notif-scheduler`, and `/etc/ntfy/server.yml`. For an app code update, copy the updated project directory to Noti-Suite and run `bash lxc/update.sh` there. This copies the scheduler and dashboard files and restarts the service; it leaves the database, API key, and event presets in place. The dashboard is at `https://ntfy.foursevens.win/scheduler/`; enter the existing `SCHEDULER_API_KEY` from `/etc/notif-scheduler/env`. The key is kept in browser session storage until the tab session ends. Use the normal apt upgrade process for ntfy. The installer is for first setup and refuses to overwrite an existing installation.
+Back up `/var/lib/notif-scheduler`, `/var/lib/ntfy`, `/var/cache/ntfy`, `/etc/notif-scheduler`, and `/etc/ntfy/server.yml`. For an app code update, copy the updated project directory to Noti-Suite and run `bash lxc/update.sh` there. This copies the scheduler and dashboard files and restarts the service; it leaves the database, API key, and event presets in place. The dashboard is at `https://scheduler.foursevens.win/`; enter the existing `SCHEDULER_API_KEY` from `/etc/notif-scheduler/env`. The key is kept in browser session storage until the tab session ends. Use the normal apt upgrade process for ntfy. The installer is for first setup and refuses to overwrite an existing installation.

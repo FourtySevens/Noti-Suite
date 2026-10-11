@@ -1,64 +1,41 @@
 # Cloudflare Tunnel public access
 
-Your ISP blocks inbound TCP 80 and 443. Use **Cloudflare Tunnel** with the Cloudflare-managed `foursevens.win` DNS zone. This makes `https://ntfy.foursevens.win` reachable from iPhones and project clients without any new router forwarding. Keep `champyy.ddns.net` for the existing VPN.
+Your ISP blocks inbound TCP 80 and 443. Keep the Cloudflare Tunnel connector on **Noti-Suite**, where it is already running. One tunnel can publish both services under separate hostnames. No router port forwarding or Caddy change is needed for this setup. `champyy.ddns.net` stays dedicated to the VPN.
 
-## Traffic path
+## Published application routes
 
-Run `cloudflared` in the existing Caddy LXC. It opens an outbound connection to Cloudflare. Cloudflare accepts HTTPS requests for `ntfy.foursevens.win` and sends them through that tunnel to Caddy's loopback listener on port 8081. Caddy proxies `/scheduler/*` to the scheduler LXC on port 8080 and all other paths to ntfy on port 8093. The router needs **no new inbound forwarding**.
+In the [Cloudflare dashboard](https://developers.cloudflare.com/tunnel/get-started/#publish-an-application), go to **Networking → Tunnels**, select the existing tunnel, then add or edit its **Published application** routes:
 
-## Configure the Caddy LXC
+| Public hostname | Service URL | Service |
+| --- | --- | --- |
+| `ntfy.foursevens.win` | `http://127.0.0.1:8093` | ntfy web, topics, iOS message fetches |
+| `scheduler.foursevens.win` | `http://127.0.0.1:8080` | Scheduler dashboard and `/v1/...` API |
 
-Add the listener in [Caddyfile.example](Caddyfile.example) to your existing Caddy configuration, with the verified IP of the new application LXC. Caddy listens only on `127.0.0.1:8081` for tunnel traffic. Validate and reload Caddy on that LXC. Its existing `foursevens.win` routes can remain in place.
+Use **HTTP** for both local Service URLs. They are loopback addresses on **Noti-Suite**, because that is where `cloudflared` runs. Cloudflare serves the public HTTPS certificates. A hostname alone is not a valid Service URL. Neither route needs a path prefix.
 
-## Create the tunnel
+The scheduler URL must be separate from ntfy's hostname. ntfy interprets paths on `ntfy.foursevens.win` as topics; requests for `/scheduler/` will reach ntfy unless a separate proxy handles that path. Update scripts and containers to call `https://scheduler.foursevens.win/v1/...`. Keep the iOS ntfy app pointed at `https://ntfy.foursevens.win`.
 
-In the [Cloudflare dashboard](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/), open **Networking → Tunnels**, create a tunnel, and select the Caddy LXC's Linux architecture. Run the installation command shown by Cloudflare **inside the Caddy LXC**; it installs `cloudflared` with that tunnel's token. Treat the token as a secret.
+The scheduler API requires the shared `SCHEDULER_API_KEY` in the `X-API-Key` header. The dashboard asks for that same key and stores it in browser session storage for the tab. Keep ntfy's own login and access controls enabled. A Cloudflare Access browser login in front of the ntfy hostname may interfere with native ntfy clients; the provided setup uses ntfy authentication and the scheduler API key.
 
-Add a **Published application** route with:
+## Verify each hop
 
-| Setting | Value |
-| --- | --- |
-| Subdomain | `ntfy` |
-| Domain | `foursevens.win` |
-| Service type | `HTTP` |
-| Service URL | `http://127.0.0.1:8081` |
-
-Wait for the tunnel to report healthy and check `https://ntfy.foursevens.win` on cellular. Cloudflare manages the public hostname and certificate. Keep ntfy's own login and access controls enabled. A Cloudflare Access browser login in front of this hostname may interfere with native ntfy clients, so this setup relies on ntfy authentication and the scheduler API key.
-
-The connector must run in the **Caddy LXC** for the `127.0.0.1:8081` Service URL to work. If another connector for the same tunnel also runs in Noti-Suite, stop that instance after confirming the Caddy connector is healthy; Cloudflare can route requests to either connector. `cloudflared tunnel list` is a management command and may ask for an account `cert.pem` even when a token-installed tunnel service is running normally. Check tunnel health in the Cloudflare dashboard or use `systemctl is-active cloudflared` on the connector host. Do not share the tunnel installation token.
-
-If the tunnel was first installed in Noti-Suite, move the connector in this order:
-
-1. In the **Caddy LXC**, make sure `curl -i http://127.0.0.1:8081/` returns the ntfy page. Caddy's upstream must be `192.168.0.40:8093`, the actual Noti-Suite address.
-2. In the Cloudflare dashboard, open **Networking → Tunnels → your existing tunnel → Overview → Add a replica**. Select Linux and copy the connector installation command. Run it in the **Caddy LXC**. Set the Published application's Service URL to `http://127.0.0.1:8081`. Keep the installation token private.
-3. Confirm the tunnel has a healthy connector in the Caddy LXC and the public ntfy URL works. If the old connector in **Noti-Suite** is dedicated to this tunnel, stop it with `systemctl disable --now cloudflared`. If it also serves other routes, migrate those routes first or use a separate tunnel. Running both as replicas can send some requests to the wrong LXC.
-
-The `cert.pem` requested by `cloudflared tunnel list` is an account management credential. A remotely managed tunnel installed with the dashboard token does not need it to serve traffic; it is separate from the TLS certificate Cloudflare presents to visitors.
-
-The supplied LXC and Compose configurations already set ntfy's `base-url` to `https://ntfy.foursevens.win` and `upstream-base-url` to `https://ntfy.sh`. Use the same public URL in the iOS app. After an iPhone receives a push wakeup, it fetches the actual notification through the tunnel. Test with Wi-Fi off.
-
-## If Cloudflare returns 502
-
-The public TLS certificate is served by Cloudflare. The tunnel's **Service URL must be `http://127.0.0.1:8081` when `cloudflared` runs in the Caddy LXC**. It must use `http://`, because the example Caddy listener on port 8081 is plain HTTP. A Cloudflare Tunnel 502 usually means the connector cannot reach that local service; a 502 returned by Caddy instead points to one of its upstreams.
-
-Run these on the **Caddy LXC**:
+On **Noti-Suite**:
 
 ```sh
-systemctl status cloudflared caddy --no-pager
-curl -i http://127.0.0.1:8081/
-curl -i http://192.168.0.40:8093/
-curl -i http://192.168.0.40:8080/healthz
-journalctl -u cloudflared -u caddy -n 100 --no-pager
+systemctl is-active ntfy notif-scheduler cloudflared
+curl -i http://127.0.0.1:8093/
+curl -i http://127.0.0.1:8080/healthz
+curl -i http://127.0.0.1:8080/
 ```
 
-Noti-Suite currently uses `192.168.0.40`; update these probes if its IP changes. Do not use `127.0.0.1:8093` from the Caddy LXC: loopback would point to Caddy's own container, while ntfy runs in Noti-Suite. An HTTP response from ntfy, including a login or authorization response, confirms that the port is reachable. The scheduler health URL should return `{"status":"ok"}`.
+The first web request should return ntfy's page. The scheduler health request should return `{"status":"ok"}`, and its root should return the dashboard HTML. From a browser outside the LAN, open `https://ntfy.foursevens.win/` and `https://scheduler.foursevens.win/`. Test ntfy from the iPhone with Wi-Fi off.
 
-- If `127.0.0.1:8081` refuses connections, the Caddy listener was not added or reloaded. Validate your Caddy config and restart or reload Caddy.
-- If port 8081 responds with a Caddy 502, check the two `192.168.0.40` probes, service status on the application LXC, and firewalls between the LXCs.
-- If port 8081 works but the public URL still shows a Cloudflare 502, check the tunnel's Service URL and where `cloudflared` is installed. `127.0.0.1` always means the machine running `cloudflared`. Inspect its logs for `connection refused` or a protocol mismatch.
+If a public route returns 502 while the matching local request works, check that its Published application Service URL matches the table and that `cloudflared` is active on Noti-Suite. If the scheduler hostname shows ntfy's topic UI, that hostname is still routed to port 8093 or another ntfy proxy; change its Service URL to port 8080. `cloudflared tunnel list` asks for an account `cert.pem` even when a token-installed tunnel is serving traffic; use the Cloudflare dashboard or `systemctl is-active cloudflared` to check this connector.
 
-## Existing VPN
+## If the connector moves to Caddy later
 
-Your VPN remains on `champyy.ddns.net` and its existing port. It is separate from the Cloudflare Tunnel; no VPN change is required for ntfy.
+The optional [Caddyfile.example](Caddyfile.example) provides two loopback listeners on the **Caddy LXC**. Once both listener checks work there, change the Cloudflare routes to `http://127.0.0.1:8081` for ntfy and `http://127.0.0.1:8082` for the scheduler, then install the tunnel connector on Caddy. Do not leave replicas of the same tunnel running in both LXCs with these loopback Service URLs: Cloudflare could send a request to either connector, and `127.0.0.1` would refer to different machines.
 
-DDNS alone cannot make a blocked port reachable. A [DNS challenge](https://caddyserver.com/docs/automatic-https#dns-challenge) can obtain a certificate without open ports, but the Cloudflare Tunnel supplies the actual public traffic path.
+## iOS and VPN
+
+The supplied ntfy config keeps `base-url: https://ntfy.foursevens.win` and `upstream-base-url: https://ntfy.sh`. The iPhone uses the ntfy hostname to fetch notification contents after a push wakeup. The scheduler hostname is for creating and managing notifications. Your VPN continues to use `champyy.ddns.net` independently.

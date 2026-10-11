@@ -1,6 +1,6 @@
 # NotifScheduler
 
-A small HTTP API for one-time, recurring, and event-triggered notifications. Machines and containers submit jobs; a persistent SQLite queue delivers them to a self-hosted [ntfy](https://docs.ntfy.sh/) server. A Cloudflare Tunnel through your existing Caddy LXC serves ntfy and the API at `https://ntfy.foursevens.win`.
+A small HTTP API for one-time, recurring, and event-triggered notifications. Machines and containers submit jobs; a persistent SQLite queue delivers them to a self-hosted [ntfy](https://docs.ntfy.sh/) server. Cloudflare Tunnel serves ntfy at `https://ntfy.foursevens.win` and the scheduler at `https://scheduler.foursevens.win`.
 
 **Recommended for Proxmox:** [run both services natively in one LXC](LXC.md). The Docker Compose deployment below remains available as an alternative. The API examples apply to either deployment.
 
@@ -8,13 +8,13 @@ See the [Cloudflare Tunnel setup](ACCESS.md) and [network diagram](NETWORK.md) f
 
 ## Dashboard
 
-Open `https://ntfy.foursevens.win/scheduler/` after the Caddy route and tunnel are working. Enter the `SCHEDULER_API_KEY` from your LXC's `/etc/notif-scheduler/env` (or from `.env` with Compose). The browser keeps the key in session storage for that tab. The dashboard can create immediate, scheduled, and recurring notifications, trigger configured event presets, view recent jobs by project, and cancel pending jobs. ntfy's own web UI remains at `https://ntfy.foursevens.win/` for subscribing to topics and reading messages.
+Open `https://scheduler.foursevens.win/` after its tunnel route is working. Enter the `SCHEDULER_API_KEY` from your LXC's `/etc/notif-scheduler/env` (or from `.env` with Compose). The browser keeps the key in session storage for that tab. The dashboard can create immediate, scheduled, and recurring notifications, trigger configured event presets, view recent jobs by project, and cancel pending jobs. ntfy's own web UI remains at `https://ntfy.foursevens.win/` for subscribing to topics and reading messages.
 
 ## Docker Compose deployment (alternative)
 
 ### Before starting
 
-- Configure a Cloudflare Tunnel in your Caddy LXC for `ntfy.foursevens.win`, following [ACCESS.md](ACCESS.md). Do not point this hostname at your home IP.
+- For the Compose deployment, run the tunnel connector on your Caddy LXC and configure two published application routes as described in [ACCESS.md](ACCESS.md#if-the-connector-moves-to-caddy-later). Do not point either hostname at your home IP.
 - Give the Docker host a stable LAN IP that the Caddy LXC can reach. The stack binds ntfy to port 8093 and the scheduler to port 8080 on that address. Restrict those two ports to the Caddy LXC in your firewall.
 - Install Docker and the Compose plugin.
 
@@ -41,21 +41,21 @@ This setup makes ntfy and the scheduler API reachable from outside the LAN. The 
 
    Copy the `tk_...` token into `NTFY_TOKEN` in `.env`. The account's password can be a separate random password; the scheduler uses its token.
 5. Start everything: `docker compose up -d --build`. Check `docker compose ps` and `docker compose logs --tail=100 scheduler ntfy`.
-6. In your Caddy LXC, add the loopback listener from `Caddyfile.example` alongside your existing sites, using the verified Docker host IP. Reload Caddy, then publish `ntfy.foursevens.win` through Cloudflare Tunnel as described in [ACCESS.md](ACCESS.md).
+6. In your Caddy LXC, add both loopback listeners from `Caddyfile.example` alongside your existing sites, using the verified Docker host IP. Reload Caddy, then publish `ntfy.foursevens.win` to `http://127.0.0.1:8081` and `scheduler.foursevens.win` to `http://127.0.0.1:8082` through Cloudflare Tunnel.
 7. On an iPhone, add `https://ntfy.foursevens.win` as the ntfy server, sign in as `admin`, allow notifications, and subscribe to a project topic such as `notif-backups`. Test while on cellular data. Each project gets a topic named `notif-<project>`.
 
 The scheduler stores jobs in a named Docker volume. The ntfy user database and message cache use another named volume. Back up both volumes along with `.env` and your Caddy configuration.
 
 ## Create notifications
 
-Send requests to `https://ntfy.foursevens.win/scheduler/v1/projects/<project>/notifications`. Project names use letters, digits, `_`, and `-` (up to 64 characters, including the `notif-` topic prefix). Use the same key for every project.
+Send requests to `https://scheduler.foursevens.win/v1/projects/<project>/notifications`. Project names use letters, digits, `_`, and `-` (up to 64 characters, including the `notif-` topic prefix). Use the same key for every project.
 
 For the curl examples below, export `SCHEDULER_API_KEY` in your shell with the value from `.env`.
 
 Send now:
 
 ```sh
-curl -X POST 'https://ntfy.foursevens.win/scheduler/v1/projects/backups/notifications' \
+curl -X POST 'https://scheduler.foursevens.win/v1/projects/backups/notifications' \
   -H "X-API-Key: $SCHEDULER_API_KEY" \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: backup-2026-09-24' \
@@ -67,7 +67,7 @@ curl -X POST 'https://ntfy.foursevens.win/scheduler/v1/projects/backups/notifica
 Edit `events.json` (Compose) or `/etc/notif-scheduler/events.json` (LXC) to define each project's event names and notification contents. The included examples are `backups/completed` and `backups/failed`. Restart the scheduler after editing with `docker compose restart scheduler` or `systemctl restart notif-scheduler`, respectively.
 
 ```sh
-curl -X POST 'https://ntfy.foursevens.win/scheduler/v1/projects/backups/events/failed' \
+curl -X POST 'https://scheduler.foursevens.win/v1/projects/backups/events/failed' \
   -H "X-API-Key: $SCHEDULER_API_KEY" \
   -H 'Idempotency-Key: backup-failure-2026-09-24'
 ```
@@ -94,22 +94,22 @@ List the latest 100 jobs, inspect one, or cancel a pending job:
 
 ```sh
 curl -H "X-API-Key: $SCHEDULER_API_KEY" \
-  'https://ntfy.foursevens.win/scheduler/v1/projects/backups/notifications'
+  'https://scheduler.foursevens.win/v1/projects/backups/notifications'
 
 curl -H "X-API-Key: $SCHEDULER_API_KEY" \
-  'https://ntfy.foursevens.win/scheduler/v1/projects/backups/notifications/JOB_ID'
+  'https://scheduler.foursevens.win/v1/projects/backups/notifications/JOB_ID'
 
 curl -X DELETE -H "X-API-Key: $SCHEDULER_API_KEY" \
-  'https://ntfy.foursevens.win/scheduler/v1/projects/backups/notifications/JOB_ID'
+  'https://scheduler.foursevens.win/v1/projects/backups/notifications/JOB_ID'
 ```
 
-`GET https://ntfy.foursevens.win/scheduler/healthz` is an unauthenticated liveness check. It does not check ntfy delivery. For a container on the `notif-scheduler` Docker network, `http://scheduler:8080/v1/...` also works; otherwise use the HTTPS address.
+`GET https://scheduler.foursevens.win/healthz` is an unauthenticated liveness check. It does not check ntfy delivery. For a container on the `notif-scheduler` Docker network, `http://scheduler:8080/v1/...` also works; otherwise use the HTTPS address.
 
 Delivery failures are retried with increasing delays, up to one hour between attempts. A job that was being sent when the scheduler stopped may be sent again after restart, so consumers should tolerate an occasional duplicate. Cancellation cannot recall a message already sent to ntfy.
 
 ## Security and operations
 
-ntfy starts with anonymous access denied. The `admin` account can subscribe to all project topics; the `scheduler` account can only publish to `notif-*`. Your Caddy LXC terminates TLS for both ntfy and scheduler requests. The `SCHEDULER_API_KEY` travels in an HTTP header, so use the HTTPS URL from other machines. Rotate the shared key in `.env` (Compose) or `/etc/notif-scheduler/env` (LXC) and restart the scheduler if it leaks. ntfy tokens can be rotated separately.
+ntfy starts with anonymous access denied. The `admin` account can subscribe to all project topics; the `scheduler` account can only publish to `notif-*`. Cloudflare serves TLS for both public hostnames. The `SCHEDULER_API_KEY` travels in an HTTP header, so use the HTTPS URL from other machines. Rotate the shared key in `.env` (Compose) or `/etc/notif-scheduler/env` (LXC) and restart the scheduler if it leaks. ntfy tokens can be rotated separately.
 
 Cloudflare Tunnel provides public reachability without inbound ports. Both deployments configure `upstream-base-url: https://ntfy.sh` so ntfy sends iOS push wakeups through ntfy.sh; the iPhone then fetches actual message content through the tunnel. Keep ntfy's public `base-url` identical to the server URL in the iOS app. If the phone only shows “New message,” verify that it can reach `https://ntfy.foursevens.win` outside your LAN. See the [ntfy iOS setup](https://docs.ntfy.sh/config/#ios-instant-notifications) and [known issues](https://docs.ntfy.sh/known-issues/).
 
