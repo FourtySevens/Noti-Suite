@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Notif Scheduler</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <script src="dashboard.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">◉</span><div><strong>Notif Scheduler</strong><small>Notifications for every project</small></div></div>
+    <div class="top-actions"><span id="connection-status" class="status-pill">Locked</span><button id="disconnect" class="quiet" type="button" hidden>Lock</button></div>
+  </header>
+
+  <main>
+    <section id="unlock-panel" class="unlock card">
+      <div class="eyebrow">WORKSPACE ACCESS</div>
+      <h1>Open your scheduler</h1>
+      <p>Enter the shared scheduler API key from <code>/etc/notif-scheduler/env</code> on your Noti-Suite LXC. It stays in this browser tab.</p>
+      <form id="unlock-form" class="inline-form">
+        <label class="sr-only" for="api-key">Scheduler API key</label>
+        <input id="api-key" type="password" placeholder="Scheduler API key" autocomplete="off" required>
+        <button type="submit">Open dashboard</button>
+      </form>
+      <p id="unlock-error" class="error" role="alert" hidden></p>
+    </section>
+
+    <div id="workspace" hidden>
+      <div class="page-heading"><div><div class="eyebrow">CONTROL CENTER</div><h1>Notifications</h1><p>Create a delivery, fire a saved event, or inspect the queue.</p></div><button id="refresh" class="secondary" type="button">↻ &nbsp; Refresh</button></div>
+      <section class="project-bar card">
+        <div><label for="project">Project</label><p>Choose an existing project or type a new name.</p></div>
+        <div class="project-control"><input id="project" list="project-list" placeholder="e.g. backups" maxlength="64" autocomplete="off"><datalist id="project-list"></datalist><button id="open-project" type="button">Open project</button></div>
+      </section>
+
+      <p id="notice" class="notice" role="status" hidden></p>
+      <div id="project-content" hidden>
+        <div class="main-grid">
+          <section class="card compose">
+            <div class="section-head"><div><div class="eyebrow">NEW NOTIFICATION</div><h2>Compose</h2></div><span class="section-icon">✦</span></div>
+            <form id="notification-form">
+              <label for="title">Title <span class="optional">optional</span></label>
+              <input id="title" maxlength="200" placeholder="A short heading">
+              <label for="message">Message</label>
+              <textarea id="message" rows="5" maxlength="4000" placeholder="What should the notification say?" required></textarea>
+              <div class="field-row"><div><label for="priority">Priority</label><select id="priority"><option value="1">1 · Minimum</option><option value="2">2 · Low</option><option value="3" selected>3 · Default</option><option value="4">4 · High</option><option value="5">5 · Urgent</option></select></div><div><label for="tags">Tags <span class="optional">optional</span></label><input id="tags" placeholder="warning, backup"></div></div>
+              <fieldset class="delivery-mode"><legend>Delivery</legend><label><input type="radio" name="mode" value="now" checked> Now</label><label><input type="radio" name="mode" value="later"> Schedule</label><label><input type="radio" name="mode" value="repeat"> Repeat</label></fieldset>
+              <div id="schedule-fields" hidden><label for="send-at">First delivery</label><input id="send-at" type="datetime-local"></div>
+              <div id="repeat-fields" hidden><label for="interval">Repeat every</label><select id="interval"><option value="3600">Hour</option><option value="86400" selected>Day</option><option value="604800">Week</option><option value="2592000">30 days</option></select></div>
+              <button class="full-button" type="submit">Create notification <span>→</span></button>
+            </form>
+          </section>
+
+          <section class="card presets">
+            <div class="section-head"><div><div class="eyebrow">ON DEMAND</div><h2>Event presets</h2></div><span class="section-icon">⚡</span></div>
+            <p>Trigger a configured event now. Machines can call the same event endpoint.</p>
+            <div id="events-list" class="events-list"></div>
+            <p class="hint">Edit presets in <code>/etc/notif-scheduler/events.json</code>, then restart the scheduler.</p>
+          </section>
+        </div>
+
+        <section class="card jobs">
+          <div class="section-head"><div><div class="eyebrow">PROJECT ACTIVITY</div><h2>Notifications</h2></div><span id="job-count" class="count">0 shown</span></div>
+          <div id="jobs-list" class="jobs-list"></div>
+          <p class="hint">Showing the latest 100 jobs for this project. Recurring jobs remain pending between deliveries.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

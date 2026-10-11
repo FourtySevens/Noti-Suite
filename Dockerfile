@@ -2,6 +2,7 @@ FROM python:3.13-slim
 
 WORKDIR /app
 COPY scheduler.py /app/scheduler.py
+COPY dashboard.html dashboard.css dashboard.js /app/
 
 ENV PYTHONUNBUFFERED=1 \
     DATABASE_PATH=/data/scheduler.db \

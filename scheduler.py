@@ -158,6 +158,11 @@ class Store:
             rows = db.execute("SELECT * FROM jobs WHERE project=? ORDER BY created_at DESC LIMIT 100", (project,)).fetchall()
             return [self.public(row) for row in rows]
 
+    def projects(self) -> list[str]:
+        with self.connection() as db:
+            rows = db.execute("SELECT DISTINCT project FROM jobs ORDER BY project").fetchall()
+            return [row["project"] for row in rows]
+
     def cancel(self, project: str, job_id: str) -> dict | None:
         with self.connection() as db:
             db.execute("UPDATE jobs SET status='cancelled' WHERE project=? AND id=? AND status IN ('pending', 'sending')", (project, job_id))
@@ -264,6 +269,18 @@ def worker(config: Config, store: Store, stop: threading.Event) -> None:
 
 def make_handler(config: Config, store: Store):
     class Handler(BaseHTTPRequestHandler):
+        def dashboard_asset(self, name: str, content_type: str) -> None:
+            data = Path(__file__).with_name(name).read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
+            self.end_headers()
+            self.wfile.write(data)
+
         def reply(self, status: int, payload: object) -> None:
             data = json.dumps(payload).encode("utf-8")
             self.send_response(status)
@@ -282,8 +299,18 @@ def make_handler(config: Config, store: Store):
 
         def handle_api(self, method: str) -> None:
             path = parse.urlsplit(self.path).path
+            if method == "GET" and path in ("/", "/dashboard.html", "/dashboard.css", "/dashboard.js"):
+                name = {"/": "dashboard.html", "/dashboard.html": "dashboard.html",
+                        "/dashboard.css": "dashboard.css", "/dashboard.js": "dashboard.js"}[path]
+                kind = "text/html" if name.endswith(".html") else "text/css" if name.endswith(".css") else "text/javascript"
+                self.dashboard_asset(name, kind + "; charset=utf-8")
+                return
             if path == "/healthz" and method == "GET":
                 self.reply(200, {"status": "ok"})
+                return
+            if path == "/v1/projects" and method == "GET":
+                if self.authorized():
+                    self.reply(200, {"projects": sorted(set(store.projects()) | set(config.events))})
                 return
             parts = path.strip("/").split("/")
             if (len(parts) not in (4, 5) or parts[:2] != ["v1", "projects"]
@@ -295,6 +322,9 @@ def make_handler(config: Config, store: Store):
             if not self.authorized():
                 return
             if parts[3] == "events":
+                if method == "GET" and len(parts) == 4:
+                    self.reply(200, {"events": config.events.get(project, {})})
+                    return
                 if method != "POST" or len(parts) != 5:
                     self.reply(405, {"error": "Method not allowed"})
                     return

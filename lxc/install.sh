@@ -35,6 +35,9 @@ fi
 
 install -d -o root -g root -m 0755 /opt/notif-scheduler
 install -o root -g root -m 0644 "$source_dir/scheduler.py" /opt/notif-scheduler/scheduler.py
+for asset in dashboard.html dashboard.css dashboard.js; do
+    install -o root -g root -m 0644 "$source_dir/$asset" "/opt/notif-scheduler/$asset"
+done
 install -d -o notif-scheduler -g notif-scheduler -m 0750 /var/lib/notif-scheduler
 install -d -o ntfy -g ntfy -m 0750 /var/lib/ntfy
 install -d -o ntfy -g ntfy -m 0750 /var/cache/ntfy

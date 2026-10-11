@@ -6,6 +6,10 @@ A small HTTP API for one-time, recurring, and event-triggered notifications. Mac
 
 See the [Cloudflare Tunnel setup](ACCESS.md) and [network diagram](NETWORK.md) for the public request path and iOS delivery flow. `champyy.ddns.net` stays dedicated to your VPN. No new router port forwarding is required.
 
+## Dashboard
+
+Open `https://ntfy.foursevens.win/scheduler/` after the Caddy route and tunnel are working. Enter the `SCHEDULER_API_KEY` from your LXC's `/etc/notif-scheduler/env` (or from `.env` with Compose). The browser keeps the key in session storage for that tab. The dashboard can create immediate, scheduled, and recurring notifications, trigger configured event presets, view recent jobs by project, and cancel pending jobs. ntfy's own web UI remains at `https://ntfy.foursevens.win/` for subscribing to topics and reading messages.
+
 ## Docker Compose deployment (alternative)
 
 ### Before starting
@@ -18,7 +22,7 @@ This setup makes ntfy and the scheduler API reachable from outside the LAN. The 
 
 ### Set up
 
-1. Create the Docker host, reserve its LAN IP, and verify whether it is `192.168.0.144`. Copy `.env.example` to `.env`. Generate a key with `python3 -c 'import secrets; print(secrets.token_urlsafe(48))'` and put it in `SCHEDULER_API_KEY`. Set `HOST_BIND_ADDRESS` to the verified IP. Do not commit `.env`.
+1. Create the Docker host and reserve its LAN IP. Copy `.env.example` to `.env`. Generate a key with `python3 -c 'import secrets; print(secrets.token_urlsafe(48))'` and put it in `SCHEDULER_API_KEY`. Set `HOST_BIND_ADDRESS` to that Docker host's LAN IP. Do not commit `.env`.
 2. Start ntfy: `docker compose up -d ntfy`.
 3. Create an ntfy administrator for signing in on phones and the web app:
 

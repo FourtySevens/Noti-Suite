@@ -114,6 +114,24 @@ class SchedulerTest(unittest.TestCase):
         self.assertIsNotNone(current["last_sent_at"])
         self.assertGreater(parse_time(current["send_at"]), parse_time(current["last_sent_at"]))
 
+    def test_dashboard_and_project_discovery(self):
+        base = f"http://127.0.0.1:{self.api.server_port}"
+        for path, content_type, expected in [
+            ("/", "text/html", b"Notif Scheduler"),
+            ("/dashboard.js", "text/javascript", b"v1/projects"),
+            ("/dashboard.css", "text/css", b".card"),
+        ]:
+            with request.urlopen(base + path, timeout=3) as response:
+                self.assertEqual(response.status, 200)
+                self.assertIn(content_type, response.headers["Content-Type"])
+                self.assertIn(expected, response.read())
+                self.assertIn("script-src 'self'", response.headers["Content-Security-Policy"])
+        self.assertEqual(self.call("GET", "/v1/projects", key=False)[0], 401)
+        self.assertEqual(self.call("GET", "/v1/projects"), (200, {"projects": ["backups"]}))
+        self.assertEqual(self.call("GET", "/v1/projects/backups/events")[1]["events"]["failed"]["title"], "Backup failed")
+        self.call("POST", "/v1/projects/demo/notifications", {"message": "Later", "send_at": "2099-01-01T12:00:00Z"})
+        self.assertEqual(self.call("GET", "/v1/projects")[1]["projects"], ["backups", "demo"])
+
 
 if __name__ == "__main__":
     unittest.main()

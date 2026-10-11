@@ -14,7 +14,7 @@ flowchart LR
             Caddy[Caddy<br/>127.0.0.1:8081]
             Tunnel --> Caddy
         end
-        subgraph AppLXC[NotifScheduler LXC · planned 192.168.0.144]
+        subgraph AppLXC[Noti-Suite LXC · 192.168.0.40]
             API[Scheduler API + worker<br/>systemd · TCP 8080]
             Ntfy[ntfy server<br/>systemd · TCP 8093]
             Jobs[(Scheduler SQLite<br/>job queue)]

@@ -1,6 +1,6 @@
 # Native Proxmox LXC deployment
 
-This path runs **ntfy and NotifScheduler directly under systemd** in one Debian or Ubuntu LXC. Docker is not needed. Your existing Caddy LXC stays separate and proxies to ports 8093 (ntfy) and 8080 (scheduler) on the new container. The planned container IP is `192.168.0.144`; verify it before using the Caddy example.
+This path runs **ntfy and NotifScheduler directly under systemd** in one Debian or Ubuntu LXC. Docker is not needed. Your existing Caddy LXC stays separate and proxies to ports 8093 (ntfy) and 8080 (scheduler) on Noti-Suite at `192.168.0.40`.
 
 ## 1. Prepare the LXC
 
@@ -58,7 +58,7 @@ The health check should return `{"status":"ok"}`. It confirms the scheduler is r
 
 ## 4. Publish through Caddy and Cloudflare Tunnel
 
-Add the loopback listener in [Caddyfile.example](Caddyfile.example) to your **existing Caddy LXC**, alongside its current `foursevens.win` sites. Replace `192.168.0.144` if the new LXC gets another IP, then validate and reload Caddy there. Follow [ACCESS.md](ACCESS.md) to install `cloudflared` in that Caddy LXC and publish `ntfy.foursevens.win` with service URL `http://127.0.0.1:8081`. No new inbound router ports are needed. `champyy.ddns.net` and your VPN remain unchanged.
+Add the loopback listener in [Caddyfile.example](Caddyfile.example) to your **existing Caddy LXC**, alongside its current `foursevens.win` sites. It points to Noti-Suite at `192.168.0.40`. Validate and reload Caddy there. Follow [ACCESS.md](ACCESS.md) to install `cloudflared` in that Caddy LXC and publish `ntfy.foursevens.win` with service URL `http://127.0.0.1:8081`. No new inbound router ports are needed. `champyy.ddns.net` and your VPN remain unchanged.
 
 The ntfy app must be reachable at the root of `https://ntfy.foursevens.win`; the scheduler is under `/scheduler/`. The [iOS push setup](https://docs.ntfy.sh/config/#ios-instant-notifications) requires ntfy's `base-url` to match the URL used in the iOS app. The supplied config also sets `upstream-base-url: https://ntfy.sh` so iOS receives prompt wakeups.
 
@@ -74,8 +74,8 @@ curl -X POST 'https://ntfy.foursevens.win/scheduler/v1/projects/backups/events/f
 
 The preset text comes from `/etc/notif-scheduler/events.json`. To change or add event names, edit that file and run `systemctl restart notif-scheduler`. The [main README](README.md#create-notifications) describes immediate, scheduled, and recurring API requests.
 
-If delivery fails, inspect `journalctl -u notif-scheduler -u ntfy -n 100 --no-pager`. Check reachability from the Caddy LXC to both ports, and test `https://ntfy.foursevens.win` over cellular. If the iPhone only shows “New message,” it received the wakeup but could not fetch the actual message from your public server.
+If delivery fails, inspect `journalctl -u notif-scheduler -u ntfy -n 100 --no-pager`. Check reachability from the Caddy LXC to both ports, and test `https://ntfy.foursevens.win` over cellular. For a Cloudflare 502, use the [hop-by-hop checks](ACCESS.md#if-cloudflare-returns-502). If the iPhone only shows “New message,” it received the wakeup but could not fetch the actual message from your public server.
 
 ## Updates and backups
 
-Back up `/var/lib/notif-scheduler`, `/var/lib/ntfy`, `/var/cache/ntfy`, `/etc/notif-scheduler`, and `/etc/ntfy/server.yml`. For an app code update, copy the new `scheduler.py` into `/opt/notif-scheduler` and restart `notif-scheduler`. Use the normal apt upgrade process for ntfy. The installer is for first setup and refuses to overwrite an existing installation.
+Back up `/var/lib/notif-scheduler`, `/var/lib/ntfy`, `/var/cache/ntfy`, `/etc/notif-scheduler`, and `/etc/ntfy/server.yml`. For an app code update, copy the updated project directory to Noti-Suite and run `bash lxc/update.sh` there. This copies the scheduler and dashboard files and restarts the service; it leaves the database, API key, and event presets in place. The dashboard is at `https://ntfy.foursevens.win/scheduler/`; enter the existing `SCHEDULER_API_KEY` from `/etc/notif-scheduler/env`. The key is kept in browser session storage until the tab session ends. Use the normal apt upgrade process for ntfy. The installer is for first setup and refuses to overwrite an existing installation.
